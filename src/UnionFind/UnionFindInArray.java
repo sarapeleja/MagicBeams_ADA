@@ -1,4 +1,4 @@
-
+package UnionFind;
 
 public class UnionFindInArray implements UnionFind {
 

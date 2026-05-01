@@ -1,4 +1,4 @@
-
+package UnionFind;
 
 public class NotRepresentativeException extends RuntimeException {
 
