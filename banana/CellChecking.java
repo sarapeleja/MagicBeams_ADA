@@ -209,7 +209,7 @@ public class Main {
                     int c = cell.getValue();
                     if (r >= 0 && r < nRows && c >= 0 && c < nCols) {
                         int blockingBeamNum = grid[r][c];
-                        if (blockingBeamNum != 0 && blockingBeamNum != j) {                          
+                        if (blockingBeamNum != 0) {                          
                             graph.get(j).add(blockingBeamNum - 1); // Edge: b2 -> blockingBeam
                             reverseGraph.get(blockingBeamNum - 1).add(j); // blockingBeam -> b2 for tracing dependencies backwards
                         }
