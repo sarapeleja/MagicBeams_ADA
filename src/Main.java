@@ -3,7 +3,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
-import java.util.Map.Entry;
 
 public class Main {
 
@@ -22,7 +21,6 @@ public class Main {
             final int length;
             final char direction;
             final int minRow, maxRow, minCol, maxCol;
-            //final List<Entry<Integer, Integer>> cells; // Lazy initialization of the cells this beam occupies.
 
             Beam(int num, int row, int col, int length, char direction) {
                 this.num = num;
@@ -39,22 +37,14 @@ public class Main {
                     case SOUTH -> maxR = row + length - 1;
                     case WEST -> minC = col - length + 1;
                     case EAST -> maxC = col + length - 1;
+                    default -> throw new IllegalArgumentException("Invalid direction: " + direction);
                 }
-                // Ensure min <= max for rows and columns, makes it easier to check if a cell is taken by this beam.
-                this.minRow = minR;
-                this.maxRow = maxR;
-                this.minCol = minC;
-                this.maxCol = maxC;
-            }
 
-            boolean isBlockedBy(Beam other) {
-                return switch (this.direction) {
-                    case NORTH -> this.col >= other.minCol && this.col <= other.maxCol && other.minRow < this.row;
-                    case SOUTH -> this.col >= other.minCol && this.col <= other.maxCol && other.maxRow > this.row;
-                    case WEST -> this.row >= other.minRow && this.row <= other.maxRow && other.minCol < this.col;
-                    case EAST -> this.row >= other.minRow && this.row <= other.maxRow && other.maxCol > this.col;
-                    default -> false;
-                };
+                // Ensure min <= max for rows and columns, makes it easier to check if a cell is taken by this beam.
+                this.minRow = minR; // top most
+                this.maxRow = maxR; // bottom most
+                this.minCol = minC; // left most
+                this.maxCol = maxC; // right most
             }
 
             boolean needsRemoval(int chosenStart, int chosenSize) {
@@ -62,31 +52,7 @@ public class Main {
                 int targetMaxCol = chosenStart + chosenSize - 1;
                 return this.maxCol >= targetMinCol && this.minCol <= targetMaxCol;
             }
-            List<Entry<Integer, Integer>> getCells() {
-                /* if (this.cells != null) {
-                    return this.cells;
-                } */
-                List<Entry<Integer, Integer>> tiles = new ArrayList<>(length);
-                int r = row, c = col;
-                int i = 0, j = 0;
-                switch (this.direction) {
-                    case NORTH ->
-                        i = - 1;
-                    case SOUTH ->
-                        i = 1;
-                    case WEST ->
-                        j = - 1;
-                    case EAST ->
-                        j = 1;
-                }
-
-                for (int k = 0; k < length; k++) {
-                    tiles.add(new AbstractMap.SimpleEntry<>(r, c));
-                    r += i;
-                    c += j;
-                }
-                return tiles;
-            }
+            
             int[] getEscapeVector() {
                 return switch (this.direction) {
                     case NORTH -> new int[]{-1, 0};
@@ -120,12 +86,15 @@ public class Main {
                 graph.add(new LinkedList<>());
                 reverseGraph.add(new LinkedList<>());
                 Beam b = beams.get(i);
-                List<Entry<Integer, Integer>> cells = b.getCells();
-                for (Entry<Integer, Integer> cell : cells) {
-                    int r = cell.getKey();
-                    int c = cell.getValue();
+                int[] escapeVector = b.getEscapeVector();
+                int r = b.row, c = b.col;
+                int rv = escapeVector[0], cv = escapeVector[1];
+
+                for (int k = 0; k < b.length; k++) {
+                    r += rv;
+                    c += cv;
                     if(grid[r][c] != 0) {
-                        throw new IllegalStateException("Overlapping beams detected at (" + r + ", " + c + ") between beam " + grid[r][c] + " and beam " + b.num);
+                        throw new IllegalStateException("Overlapping beams at (" + r + ", " + c + ") between beam " + grid[r][c] + " and beam " + b.num);
                     }
                     grid[r][c] = b.num; // Mark the cell with the beam's 1-based index
                 }
