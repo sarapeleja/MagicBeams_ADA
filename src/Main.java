@@ -3,6 +3,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
+import java.util.Map.Entry;
 
 public class Main {
 
@@ -21,6 +22,7 @@ public class Main {
             final int length;
             final char direction;
             final int minRow, maxRow, minCol, maxCol;
+            //final List<Entry<Integer, Integer>> cells; // Lazy initialization of the cells this beam occupies.
 
             Beam(int num, int row, int col, int length, char direction) {
                 this.num = num;
@@ -28,6 +30,7 @@ public class Main {
                 this.col = col;
                 this.length = length;
                 this.direction = direction;
+                //this.cells = getCells();
 
                 // Auxiliary variables
                 int minR = row, maxR = row, minC = col, maxC = col;
@@ -59,6 +62,40 @@ public class Main {
                 int targetMaxCol = chosenStart + chosenSize - 1;
                 return this.maxCol >= targetMinCol && this.minCol <= targetMaxCol;
             }
+            List<Entry<Integer, Integer>> getCells() {
+                /* if (this.cells != null) {
+                    return this.cells;
+                } */
+                List<Entry<Integer, Integer>> tiles = new ArrayList<>(length);
+                int r = row, c = col;
+                int i = 0, j = 0;
+                switch (this.direction) {
+                    case NORTH ->
+                        i = - 1;
+                    case SOUTH ->
+                        i = 1;
+                    case WEST ->
+                        j = - 1;
+                    case EAST ->
+                        j = 1;
+                }
+
+                for (int k = 0; k < length; k++) {
+                    tiles.add(new AbstractMap.SimpleEntry<>(r, c));
+                    r += i;
+                    c += j;
+                }
+                return tiles;
+            }
+            int[] getEscapeVector() {
+                return switch (this.direction) {
+                    case NORTH -> new int[]{-1, 0};
+                    case SOUTH -> new int[]{1, 0};
+                    case WEST -> new int[]{0, -1};
+                    case EAST -> new int[]{0, 1};
+                    default -> null;
+                };
+            }
 
         }
 
@@ -73,27 +110,45 @@ public class Main {
         }
 
         static Result solve2(int nRows, int nCols, int chosenSize, int chosenStart, List<Beam> beams) {
+            int[][] grid = new int[nRows][nCols];
             int numBeams = beams.size();
             List<List<Integer>> graph = new ArrayList<>(numBeams);
             List<List<Integer>> reverseGraph = new ArrayList<>(numBeams);
-
+            
+            // Grid initialization
             for (int i = 0; i < numBeams; i++) {
-                graph.add(new ArrayList<>());
-                reverseGraph.add(new ArrayList<>());
-            }
-
-            for (int i = 0; i < numBeams; i++) {
+                graph.add(new LinkedList<>());
+                reverseGraph.add(new LinkedList<>());
                 Beam b = beams.get(i);
-                for (int j = 0; j < numBeams; j++) {
-                    if (i == j) {
-                        continue;
+                List<Entry<Integer, Integer>> cells = b.getCells();
+                for (Entry<Integer, Integer> cell : cells) {
+                    int r = cell.getKey();
+                    int c = cell.getValue();
+                    if(grid[r][c] != 0) {
+                        throw new IllegalStateException("Overlapping beams detected at (" + r + ", " + c + ") between beam " + grid[r][c] + " and beam " + b.num);
                     }
-                    Beam b2 = beams.get(j);
-
-                    // If b is blocked by b2, b2 must move FIRST. 
-                    if (b.isBlockedBy(b2)) {
-                        graph.get(j).add(i); // Edge: b2 -> b
-                        reverseGraph.get(i).add(j); // b -> b2 for tracing dependencies backwards
+                    grid[r][c] = b.num; // Mark the cell with the beam's 1-based index
+                }
+            }
+            
+            // Dependency graph construction
+            List<Set <Integer>> blocking = new ArrayList<>(numBeams);
+            for (int i = 0; i < numBeams; i++) {
+                Beam b1 = beams.get(i);
+                blocking.add(new HashSet<>());
+                int[] escapeVector = b1.getEscapeVector();
+                for (int k = 0; k < Math.max(nRows, nCols); k++) {
+                    int r = b1.row + b1.length * escapeVector[0] + escapeVector[0] * k;
+                    int c = b1.col + b1.length * escapeVector[1] + escapeVector[1] * k;
+                    if (r < 0 || r >= nRows || c < 0 || c >= nCols) {
+                        break; // Out of bounds, stop checking further in this direction
+                    }
+                    if(grid[r][c] != 0 && blocking.get(i).add(grid[r][c])) { 
+                        int blockingBeamIndex = grid[r][c] - 1; // Convert to 0-based index
+                        if (blockingBeamIndex != i) { // Avoid self-blocking and prevent adding the same beam blocking if multiple cells of that beam block this 
+                            graph.get(blockingBeamIndex).add(i); // blockingBeam -> b1
+                            reverseGraph.get(i).add(blockingBeamIndex); // b1 -> blockingBeam
+                        }
                     }
                 }
             }
@@ -122,7 +177,7 @@ public class Main {
                 }
             }
 
-            //Calculate inDegree ONLY for edges between necessary beams
+            //Calculate inDegree ONLY for necessary beams
             int[] inDegree = new int[numBeams];
             for (int i = 0; i < numBeams; i++) {
                 if (!isNecessary[i]) {
@@ -214,10 +269,9 @@ public class Main {
 
             Solver.Result result = Solver.solve2(nRows, nCols, chosenSize, chosenStart, beams);
             if (!result.success) {
-                printOrder(result.order);
                 System.out.println("Disaster");
             } else if (result.order.isEmpty()) {
-                System.out.println("False Alarm");
+                System.out.println("False alarm");
             } else {
                 printOrder(result.order);
             }
