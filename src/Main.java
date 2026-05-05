@@ -160,6 +160,9 @@ public class Main {
             
             // Calculate inDegree ONLY for necessary beams
             PriorityQueue<Integer> q = new PriorityQueue<>();
+            
+            // Calculate inDegree ONLY for necessary beams
+            PriorityQueue<Integer> q = new PriorityQueue<>();
             int[] inDegree = new int[numBeams];
             for (int i = 0; i < numBeams; i++) {
                 if (isNecessary[i]) {
@@ -170,9 +173,9 @@ public class Main {
                     inDegree[i] = degree;
                 }
             }
-            
+
             // Topological sort using a priority queue to ensure lexicographical order
-            List<Integer> order = new ArrayList<>();
+            List<Integer> order = new LinkedList<>();
             while (!q.isEmpty()) {
                 int curr = q.poll();
                 order.add(beams.get(curr).num); // Use the 1-based index from the Beam object
