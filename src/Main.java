@@ -33,11 +33,16 @@ public class Main {
                 // Auxiliary variables
                 int minR = row, maxR = row, minC = col, maxC = col;
                 switch (direction) {
-                    case NORTH -> minR = row - length + 1;
-                    case SOUTH -> maxR = row + length - 1;
-                    case WEST -> minC = col - length + 1;
-                    case EAST -> maxC = col + length - 1;
-                    default -> throw new IllegalArgumentException("Invalid direction: " + direction);
+                    case NORTH ->
+                        minR = row - length + 1;
+                    case SOUTH ->
+                        maxR = row + length - 1;
+                    case WEST ->
+                        minC = col - length + 1;
+                    case EAST ->
+                        maxC = col + length - 1;
+                    default ->
+                        throw new IllegalArgumentException("Invalid direction: " + direction);
                 }
 
                 // Ensure min <= max for rows and columns, makes it easier to check if a cell is taken by this beam.
@@ -52,24 +57,30 @@ public class Main {
                 int targetMaxCol = chosenStart + chosenSize - 1;
                 return this.maxCol >= targetMinCol && this.minCol <= targetMaxCol;
             }
-            
+
             int[] getEscapeVector() {
                 return switch (this.direction) {
-                    case NORTH -> new int[]{-1, 0};
-                    case SOUTH -> new int[]{1, 0};
-                    case WEST -> new int[]{0, -1};
-                    case EAST -> new int[]{0, 1};
-                    default -> null;
+                    case NORTH ->
+                        new int[]{-1, 0};
+                    case SOUTH ->
+                        new int[]{1, 0};
+                    case WEST ->
+                        new int[]{0, -1};
+                    case EAST ->
+                        new int[]{0, 1};
+                    default ->
+                        null;
                 };
             }
 
         }
 
-        
-        static final class Result{
+        static final class Result {
+
             final boolean success;
             final List<Integer> order;
-            Result(boolean success, List<Integer> order){
+
+            Result(boolean success, List<Integer> order) {
                 this.success = success;
                 this.order = order;
             }
@@ -80,7 +91,7 @@ public class Main {
             int numBeams = beams.size();
             List<List<Integer>> graph = new ArrayList<>(numBeams);
             List<List<Integer>> reverseGraph = new ArrayList<>(numBeams);
-            
+
             // Grid initialization
             for (int i = 0; i < numBeams; i++) {
                 graph.add(new LinkedList<>());
@@ -93,15 +104,15 @@ public class Main {
                 for (int k = 0; k < b.length; k++) {
                     r += rv;
                     c += cv;
-                    if(grid[r][c] != 0) {
+                    if (grid[r][c] != 0) {
                         throw new IllegalStateException("Overlapping beams at (" + r + ", " + c + ") between beam " + grid[r][c] + " and beam " + b.num);
                     }
                     grid[r][c] = b.num; // Mark the cell with the beam's 1-based index
                 }
             }
-            
+
             // Dependency graph construction
-            List<Set <Integer>> blocking = new ArrayList<>(numBeams);
+            List<Set<Integer>> blocking = new ArrayList<>(numBeams);
             for (int i = 0; i < numBeams; i++) {
                 Beam b1 = beams.get(i);
                 blocking.add(new HashSet<>());
@@ -112,9 +123,9 @@ public class Main {
                     if (r < 0 || r >= nRows || c < 0 || c >= nCols) {
                         break; // Out of bounds, stop checking further in this direction
                     }
-                    if(grid[r][c] != 0 && blocking.get(i).add(grid[r][c])) { 
+                    if (grid[r][c] != 0 && blocking.get(i).add(grid[r][c])) {
                         int blockingBeamIndex = grid[r][c] - 1; // Convert to 0-based index
-                        if (blockingBeamIndex != i) { // Avoid self-blocking and prevent adding the same beam blocking if multiple cells of that beam block this 
+                        if (blockingBeamIndex != i) { // Avoid self-blocking
                             graph.get(blockingBeamIndex).add(i); // blockingBeam -> b1
                             reverseGraph.get(i).add(blockingBeamIndex); // b1 -> blockingBeam
                         }
@@ -134,7 +145,7 @@ public class Main {
                 }
             }
 
-            // Propagate necessity backwards: if 'curr' is necessary and 'j' blocks 'curr', 'j' is necessary.
+            // Propagate necessity backwards: if 'curr' is necessary and 'blocker' blocks 'curr', 'blocker' is necessary.
             while (!requiredQueue.isEmpty()) {
                 int curr = requiredQueue.poll();
                 for (int blocker : reverseGraph.get(curr)) {
@@ -146,26 +157,21 @@ public class Main {
                 }
             }
 
-            //Calculate inDegree ONLY for necessary beams
+            
+            // Calculate inDegree ONLY for necessary beams
+            PriorityQueue<Integer> q = new PriorityQueue<>();
             int[] inDegree = new int[numBeams];
             for (int i = 0; i < numBeams; i++) {
-                if (!isNecessary[i]) {
-                    continue;
-                }
-                for (int next : graph.get(i)) {
-                    if (isNecessary[next]) {
-                        inDegree[next]++;
+                if (isNecessary[i]) {
+                    int degree = reverseGraph.get(i).size();
+                    if (degree == 0) {
+                        q.add(i);
                     }
+                    inDegree[i] = degree;
                 }
             }
-
-            PriorityQueue<Integer> q = new PriorityQueue<>();
-            for (int i = 0; i < numBeams; i++) {
-                if (isNecessary[i] && inDegree[i] == 0) {
-                    q.add(i);
-                }
-            }
-
+            
+            // Topological sort using a priority queue to ensure lexicographical order
             List<Integer> order = new ArrayList<>();
             while (!q.isEmpty()) {
                 int curr = q.poll();
@@ -193,18 +199,20 @@ public class Main {
     }
 
     private static void printOrder(List<Integer> order) {
-        if (order== null || order.isEmpty()) return;
+        if (order == null || order.isEmpty()) {
+            return;
+        }
 
         StringBuilder sb = new StringBuilder();
         for (int i : order) {
             sb.append(i).append(' ');
         }
-        
+
         // Correct way to remove the last character
         if (sb.length() > 0) {
             sb.setLength(sb.length() - 1);
         }
-        
+
         System.out.println(sb.toString());
     }
 
@@ -227,7 +235,7 @@ public class Main {
             List<Solver.Beam> beams = new ArrayList<>(nBeams);
 
             for (int j = 1; j <= nBeams; j++) {
-               st = new StringTokenizer(in.readLine());
+                st = new StringTokenizer(in.readLine());
                 int row = Integer.parseInt(st.nextToken());
                 int col = Integer.parseInt(st.nextToken());
                 int length = Integer.parseInt(st.nextToken());
@@ -244,7 +252,7 @@ public class Main {
             } else {
                 printOrder(result.order);
             }
-        
+
         }
 
     }
