@@ -3,6 +3,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
+import java.util.Map.Entry;
 
 public class Main {
 
@@ -21,13 +22,17 @@ public class Main {
             final int length;
             final char direction;
             final int minRow, maxRow, minCol, maxCol;
+            final List<Entry<Integer, Integer>> cells; // Lazy initialization of the cells this beam occupies.
+            private List<Entry<Integer, Integer>> inLineCells;
 
-            Beam(int num, int row, int col, int length, char direction) {
+            Beam(int num, int row, int col, int length, char direction, int nRows, int nCols) {
                 this.num = num;
                 this.row = row;
                 this.col = col;
                 this.length = length;
                 this.direction = direction;
+                this.cells = getCells();
+                this.inLineCells = getInLineCells(nRows, nCols); // Lazy initialization of the cells in the line of this beam.
 
                 // Auxiliary variables
                 int minR = row, maxR = row, minC = col, maxC = col;
@@ -37,6 +42,7 @@ public class Main {
                     case WEST -> minC = col - length + 1;
                     case EAST -> maxC = col + length - 1;
                 }
+
                 // Ensure min <= max for rows and columns, makes it easier to check if a cell is taken by this beam.
                 this.minRow = minR;
                 this.maxRow = maxR;
@@ -45,19 +51,116 @@ public class Main {
             }
 
             boolean isBlockedBy(Beam other) {
-                return switch (this.direction) {
-                    case NORTH -> this.col >= other.minCol && this.col <= other.maxCol && other.minRow < this.row;
-                    case SOUTH -> this.col >= other.minCol && this.col <= other.maxCol && other.maxRow > this.row;
-                    case WEST -> this.row >= other.minRow && this.row <= other.maxRow && other.minCol < this.col;
-                    case EAST -> this.row >= other.minRow && this.row <= other.maxRow && other.maxCol > this.col;
-                    default -> false;
-                };
+                List<Entry<Integer, Integer>> otherCells = other.getCells();
+                // Check if any cell of the other beam is in the path of this beam.
+                switch(this.direction){
+                    case NORTH->{
+                        for(Entry<Integer, Integer> cell : otherCells) {
+                            int r = cell.getKey();
+                            int c = cell.getValue();
+                            if (c == this.col && r >= this.minRow) {
+                                return true;
+                            }
+                        }
+                    }
+                    case SOUTH->{
+                        for(Entry<Integer, Integer> cell : otherCells) {
+                            int r = cell.getKey();
+                            int c = cell.getValue();
+                            if (c == this.col && r <= this.maxRow) {
+                                return true;
+                            }
+                        }
+                    }
+                    case WEST->{
+                        for(Entry<Integer, Integer> cell : otherCells) {
+                            int r = cell.getKey();
+                            int c = cell.getValue();
+                            if (r == this.row && c >= this.minCol) {
+                                return true;
+                            }
+                        }
+                    }
+                    case EAST->{
+                        for(Entry<Integer, Integer> cell : otherCells) {
+                            int r = cell.getKey();
+                            int c = cell.getValue();
+                            if (r == this.row && c <= this.maxCol) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
             }
 
             boolean needsRemoval(int chosenStart, int chosenSize) {
                 int targetMinCol = chosenStart;
                 int targetMaxCol = chosenStart + chosenSize - 1;
                 return this.maxCol >= targetMinCol && this.minCol <= targetMaxCol;
+            }
+
+            // Cells occupied by this beam, calculated lazily and stored for future reference.
+            List<Entry<Integer, Integer>> getCells() {
+                if (this.cells != null) {
+                    return this.cells;
+                }
+                List<Entry<Integer, Integer>> tiles = new ArrayList<>(length);
+                int r = row, c = col;
+                int i = 0, j = 0;
+                switch (this.direction) {
+                    case NORTH ->
+                        i = - 1;
+                    case SOUTH ->
+                        i = 1;
+                    case WEST ->
+                        j = - 1;
+                    case EAST ->
+                        j = 1;
+                }
+
+                for (int k = 0; k < length; k++) {
+                    tiles.add(new AbstractMap.SimpleEntry<>(r, c));
+                    r += i;
+                    c += j;
+                }
+                return tiles;
+            }
+
+            // cells in path of this beam, calculated lazily and stored for future reference.
+            List<Entry<Integer,Integer>> getInLineCells(int nRows, int nCols) {
+                if (this.inLineCells != null) {
+                    return this.inLineCells;
+                }
+                this.inLineCells = new LinkedList<>();
+                switch (this.direction) {
+                    case NORTH -> {
+                        for (int r = minRow; r >= 0 ; r--) {
+                            inLineCells.add(new AbstractMap.SimpleEntry<>(r, col));
+                        }
+                        return inLineCells;
+                    }
+                    case SOUTH -> {
+                        for (int r = minRow; r < nRows ; r++) {
+                            inLineCells.add(new AbstractMap.SimpleEntry<>(r, col));
+                        }
+                        return inLineCells;
+                    }
+                    case WEST -> {
+                        for (int c = minCol; c >= 0 ; c--) {
+                            inLineCells.add(new AbstractMap.SimpleEntry<>(row, c));
+                        }
+                        return inLineCells;
+                    }
+                    case EAST -> {
+
+                        for (int c = minCol; c < nCols ; c++) {
+                            inLineCells.add(new AbstractMap.SimpleEntry<>(row, c));
+                        }
+                        return inLineCells;
+                    }
+                    default -> throw new IllegalStateException("Unexpected direction: " + direction);
+                }
             }
 
         }
@@ -73,27 +176,42 @@ public class Main {
         }
 
         static Result solve2(int nRows, int nCols, int chosenSize, int chosenStart, List<Beam> beams) {
+            int[][] grid = new int[nRows][nCols];
             int numBeams = beams.size();
             List<List<Integer>> graph = new ArrayList<>(numBeams);
             List<List<Integer>> reverseGraph = new ArrayList<>(numBeams);
 
             for (int i = 0; i < numBeams; i++) {
-                graph.add(new ArrayList<>());
-                reverseGraph.add(new ArrayList<>());
+                graph.add(new LinkedList<>());
+                reverseGraph.add(new LinkedList<>());
             }
 
             for (int i = 0; i < numBeams; i++) {
                 Beam b = beams.get(i);
-                for (int j = 0; j < numBeams; j++) {
-                    if (i == j) {
-                        continue;
+                List<Entry<Integer, Integer>> cells = b.getCells();
+                for (Entry<Integer, Integer> cell : cells) {
+                    int r = cell.getKey();
+                    int c = cell.getValue();
+                    if (r >= 0 && r < nRows && c >= 0 && c < nCols) {
+                        grid[r][c] = b.num; // Mark the grid with the beam number (1-based index)
                     }
-                    Beam b2 = beams.get(j);
+                }
+                
+            }
 
-                    // If b is blocked by b2, b2 must move FIRST. 
-                    if (b.isBlockedBy(b2)) {
-                        graph.get(j).add(i); // Edge: b2 -> b
-                        reverseGraph.get(i).add(j); // b -> b2 for tracing dependencies backwards
+            for (int j = 0; j < numBeams; j++) {
+                Beam b2 = beams.get(j);
+
+                // If b is blocked by b2, b2 must move FIRST.
+                for(Entry<Integer, Integer> cell : b2.getInLineCells(nRows, nCols)) {
+                    int r = cell.getKey();
+                    int c = cell.getValue();
+                    if (r >= 0 && r < nRows && c >= 0 && c < nCols) {
+                        int blockingBeamNum = grid[r][c];
+                        if (blockingBeamNum != 0) {                          
+                            graph.get(j).add(blockingBeamNum - 1); // Edge: b2 -> blockingBeam
+                            reverseGraph.get(blockingBeamNum - 1).add(j); // blockingBeam -> b2 for tracing dependencies backwards
+                        }
                     }
                 }
             }
@@ -142,7 +260,7 @@ public class Main {
                 }
             }
 
-            List<Integer> order = new ArrayList<>();
+            List<Integer> order = new ArrayList<>(necessaryCount);
             while (!q.isEmpty()) {
                 int curr = q.poll();
                 order.add(beams.get(curr).num); // Use the 1-based index from the Beam object
@@ -208,7 +326,7 @@ public class Main {
                 int col = Integer.parseInt(st.nextToken());
                 int length = Integer.parseInt(st.nextToken());
                 char direction = st.nextToken().charAt(0);
-                Solver.Beam b = new Solver.Beam(j, row, col, length, direction);
+                Solver.Beam b = new Solver.Beam(j, row, col, length, direction,nRows, nCols);
                 beams.add(b);
             }
 
@@ -221,7 +339,6 @@ public class Main {
             } else {
                 printOrder(result.order);
             }
-        
         }
 
     }
