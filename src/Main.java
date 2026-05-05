@@ -160,9 +160,6 @@ public class Main {
             
             // Calculate inDegree ONLY for necessary beams
             PriorityQueue<Integer> q = new PriorityQueue<>();
-            
-            // Calculate inDegree ONLY for necessary beams
-            PriorityQueue<Integer> q = new PriorityQueue<>();
             int[] inDegree = new int[numBeams];
             for (int i = 0; i < numBeams; i++) {
                 if (isNecessary[i]) {
