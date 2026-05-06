@@ -28,7 +28,6 @@ public class Main {
                 this.col = col;
                 this.length = length;
                 this.direction = direction;
-                //this.cells = getCells();
 
                 // Auxiliary variables
                 int minR = row, maxR = row, minC = col, maxC = col;
@@ -89,8 +88,8 @@ public class Main {
         static Result solve2(int nRows, int nCols, int chosenSize, int chosenStart, List<Beam> beams) {
             int[][] grid = new int[nRows][nCols];
             int numBeams = beams.size();
-            List<List<Integer>> graph = new ArrayList<>(numBeams);
-            List<List<Integer>> reverseGraph = new ArrayList<>(numBeams);
+            List<List<Integer>> graph = new ArrayList<>(numBeams); // Adjacency list for the dependency graph (blocking relationships)
+            List<List<Integer>> reverseGraph = new ArrayList<>(numBeams); // Reverse adjacency list for backtracking necessary beams
 
             // Grid initialization
             for (int i = 0; i < numBeams; i++) {
@@ -102,12 +101,14 @@ public class Main {
                 int rv = escapeVector[0], cv = escapeVector[1];
 
                 for (int k = 0; k < b.length; k++) {
-                    r += rv;
-                    c += cv;
+                    
+                    if (r < 0 || r >= nRows || c < 0 || c >= nCols) break;
                     if (grid[r][c] != 0) {
                         throw new IllegalStateException("Overlapping beams at (" + r + ", " + c + ") between beam " + grid[r][c] + " and beam " + b.num);
                     }
                     grid[r][c] = b.num; // Mark the cell with the beam's 1-based index
+                    r += rv;
+                    c += cv;
                 }
             }
 
@@ -128,8 +129,8 @@ public class Main {
                     if (grid[r][c] != 0 && blocking.get(i).add(grid[r][c])) {
                         int blockingBeamIndex = grid[r][c] - 1; // Convert to 0-based index
                         if (blockingBeamIndex != i) { // Avoid self-blocking
-                            graph.get(blockingBeamIndex).add(i); // blockingBeam -> b1
-                            reverseGraph.get(i).add(blockingBeamIndex); // b1 -> blockingBeam
+                            graph.get(blockingBeamIndex).add(i); // blockingBeam -> b1 | blockingBeam must be removed before b1 can be removed.
+                            reverseGraph.get(i).add(blockingBeamIndex); // b1 -> blockingBeam  | for backtracking necessary beams. If b1 is necessary, blockingBeam is also necessary.
                         }
                     }
                 }
