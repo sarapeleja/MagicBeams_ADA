@@ -94,8 +94,8 @@ public class Main {
 
             // Grid initialization
             for (int i = 0; i < numBeams; i++) {
-                graph.add(new LinkedList<>());
-                reverseGraph.add(new LinkedList<>());
+                graph.add(i, new LinkedList<>());
+                reverseGraph.add(i, new LinkedList<>());
                 Beam b = beams.get(i);
                 int[] escapeVector = b.getEscapeVector();
                 int r = b.row, c = b.col;
@@ -115,8 +115,10 @@ public class Main {
             List<Set<Integer>> blocking = new ArrayList<>(numBeams);
             for (int i = 0; i < numBeams; i++) {
                 Beam b1 = beams.get(i);
-                blocking.add(new HashSet<>());
+
+                blocking.add(i, new HashSet<>());
                 int[] escapeVector = b1.getEscapeVector();
+
                 for (int k = 0; k < Math.max(nRows, nCols); k++) {
                     int r = b1.row + b1.length * escapeVector[0] + escapeVector[0] * k;
                     int c = b1.col + b1.length * escapeVector[1] + escapeVector[1] * k;
@@ -138,6 +140,7 @@ public class Main {
             int necessaryCount = 0;
 
             for (int i = 0; i < numBeams; i++) {
+                // Check if beam 'i' needs to be removed to clear the path for the chosen beam. If so, mark it as necessary and add to the queue.
                 if (beams.get(i).needsRemoval(chosenStart, chosenSize)) {
                     isNecessary[i] = true;
                     requiredQueue.add(i);
@@ -148,6 +151,7 @@ public class Main {
             // Propagate necessity backwards: if 'curr' is necessary and 'blocker' blocks 'curr', 'blocker' is necessary.
             while (!requiredQueue.isEmpty()) {
                 int curr = requiredQueue.poll();
+                // For each beam that blocks 'curr', if it's not already marked as necessary, mark it and add to the queue.
                 for (int blocker : reverseGraph.get(curr)) {
                     if (!isNecessary[blocker]) {
                         isNecessary[blocker] = true;
@@ -170,7 +174,7 @@ public class Main {
                     inDegree[i] = degree;
                 }
             }
-
+            
             // Topological sort using a priority queue to ensure lexicographical order
             List<Integer> order = new LinkedList<>();
             while (!q.isEmpty()) {
