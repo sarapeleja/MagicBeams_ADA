@@ -50,46 +50,45 @@ class MagicBeamSolver {
         }
     }
 
-    record Result(boolean success, List<Integer> order) { }
+    record Result(boolean success, Iterator<Integer> order) { }
 
     public Result solve(int chosenSize, int chosenStart) {
-        int numBeams = beams.size();
 
-        // Dependency graph construction
+        // Dependency graph construction : time complexity
         buildGraph();
 
-        boolean[] isNecessary = new boolean[numBeams];
-        Queue<Integer> requiredQueue = new LinkedList<>();
+        // Find necessary beams and in degrees : time complexity
         int necessaryCount = 0;
+        BitSet isNecessary = new BitSet(nBeams);
+        Queue<Integer> requiredQueue = new LinkedList<>();
 
-        for (int i = 0; i < numBeams; i++) {
-            // Check if beam 'i' needs to be removed to clear the path for the chosen beam. If so, mark it as necessary and add to the queue.
-            if (beams.get(i).needsRemoval(chosenStart, chosenSize)) {
-                isNecessary[i] = true;
-                requiredQueue.add(i);
+        // Initial target beams
+        for (Beam b : beams) {
+            if (b.needsRemoval(chosenStart, chosenSize)) {
+                isNecessary.set(b.num-1);
+                requiredQueue.add(b.num-1);
                 necessaryCount++;
             }
         }
 
-        // Propagate necessity backwards: if 'curr' is necessary and 'blocker' blocks 'curr', 'blocker' is necessary.
+        // Reverse BFS propagation
         while (!requiredQueue.isEmpty()) {
             int curr = requiredQueue.poll();
-            // For each beam that blocks 'curr', if it's not already marked as necessary, mark it and add to the queue.
+
             for (int blocker : reverseGraph[curr]) {
-                if (!isNecessary[blocker]) {
-                    isNecessary[blocker] = true;
+                if (!isNecessary.get(blocker)) {
+                    isNecessary.set(blocker);
                     requiredQueue.add(blocker);
                     necessaryCount++;
                 }
             }
         }
 
-
         // Calculate inDegree ONLY for necessary beams
         PriorityQueue<Integer> q = new PriorityQueue<>();
-        int[] inDegree = new int[numBeams];
-        for (int i = 0; i < numBeams; i++) {
-            if (isNecessary[i]) {
+        int[] inDegree = new int[nBeams];
+        for (int i = 0; i < nBeams; i++) {
+            if (isNecessary.get(i)) {
                 int degree = reverseGraph[i].size();
                 if (degree == 0) {
                     q.add(i);
@@ -99,29 +98,31 @@ class MagicBeamSolver {
         }
 
         // Topological sort using a priority queue to ensure lexicographical order
-        List<Integer> order = new LinkedList<>();
-        while (!q.isEmpty()) {
-            int curr = q.poll();
-            order.add(beams.get(curr).num); // Use the 1-based index from the Beam object
+        List<Integer> perm = topologicalSort(inDegree, q, isNecessary);
+        Iterator<Integer> order = perm.iterator();
 
-            for (int next : graph[curr]) {
-                if (isNecessary[next]) {
-                    inDegree[next]--;
-                    if (inDegree[next] == 0) {
-                        q.add(next);
-                    }
+        // "Disaster" (Cycle detected)
+        if (necessaryCount != 0 && perm.size() != necessaryCount)
+            return new Result(false, order);
+
+        return new Result(true, order);
+    }
+
+    private List<Integer> topologicalSort(int[] inDegree, PriorityQueue<Integer> ready, BitSet isNecessary) {
+        List<Integer> permutation = new LinkedList<>();
+
+        while ( !ready.isEmpty() ) {
+            int curr = ready.remove();
+            permutation.add(beams.get(curr).num);
+            for (int v : graph[curr]) {
+                if (isNecessary.get(v)) {
+                    inDegree[v]--;
+                    if (inDegree[v] == 0)
+                        ready.add(v);
                 }
             }
         }
-
-        if (necessaryCount == 0) {
-            return new Result(true, order); // "False Alarm"
-        }
-        if (order.size() != necessaryCount) {
-            return new Result(false, order); // "Disaster" (Cycle detected)
-        }
-
-        return new Result(true, order);
+        return permutation;
     }
 
 

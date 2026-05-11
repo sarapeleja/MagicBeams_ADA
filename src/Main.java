@@ -6,19 +6,19 @@ import java.util.*;
 
 public class Main {
     
-    private static void printOrder(List<Integer> order) {
-        if (order == null || order.isEmpty()) {
+    private static void printOrder(Iterator<Integer> it) {
+        if (!it.hasNext()) {
             return;
         }
 
         StringBuilder sb = new StringBuilder();
-        for (int i : order) {
-            sb.append(i).append(' ');
-        }
 
-        // Correct way to remove the last character
-        if (!sb.isEmpty()) {
-            sb.setLength(sb.length() - 1);
+        while (it.hasNext()) {
+            sb.append(it.next());
+
+            if (it.hasNext()) {
+                sb.append(' ');
+            }
         }
 
         System.out.println(sb);
@@ -53,7 +53,7 @@ public class Main {
             MagicBeamSolver.Result result = solver.solve(chosenSize, chosenStart);
             if (!result.success()) {
                 System.out.println("Disaster");
-            } else if (result.order().isEmpty()) {
+            } else if (!result.order().hasNext()) {
                 System.out.println("False alarm");
             } else {
                 printOrder(result.order());
