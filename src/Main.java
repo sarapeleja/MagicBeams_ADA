@@ -6,24 +6,6 @@ import java.util.*;
 
 public class Main {
     
-    private static void printOrder(Iterator<Integer> it) {
-        if (!it.hasNext()) {
-            return;
-        }
-
-        StringBuilder sb = new StringBuilder();
-
-        while (it.hasNext()) {
-            sb.append(it.next());
-
-            if (it.hasNext()) {
-                sb.append(' ');
-            }
-        }
-
-        System.out.println(sb);
-    }
-
     public static void main(String[] args) throws IOException {
 
         BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
@@ -53,13 +35,35 @@ public class Main {
             MagicBeamSolver.Result result = solver.solve(chosenSize, chosenStart);
             if (!result.success()) {
                 System.out.println("Disaster");
-            } else if (!result.order().hasNext()) {
-                System.out.println("False alarm");
             } else {
                 printOrder(result.order());
             }
 
         }
 
+    }
+
+    /**
+     * If the solution is not empty, prints the beam numbers in the solution's order
+     * else prints "False alarm"
+     * @param it Iterator of the list of beam numbers
+     */
+    private static void printOrder(Iterator<Integer> it) {
+        if (!it.hasNext()) {
+            System.out.println("False alarm");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        while (it.hasNext()) {
+            sb.append(it.next());
+
+            if (it.hasNext()) {
+                sb.append(' ');
+            }
+        }
+
+        System.out.println(sb);
     }
 }
