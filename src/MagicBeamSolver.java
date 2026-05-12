@@ -1,16 +1,14 @@
 import java.util.*;
 
 class MagicBeamSolver {
-    private final List<Beam> beams;
+    private final Beam[] beams;
     private final int[][] grid;
     // Adjacency list for the dependency graph (blocking relationships)
     private final List<Integer>[] graph;
     // Reverse adjacency list for backtracking necessary beams
     private final List<Integer>[] reverseGraph;
 
-    private final int nRows;
-    private final int nCols;
-    private final int nBeams;
+    private final int nRows, nCols, nBeams;
 
     @SuppressWarnings("unchecked")
     public MagicBeamSolver(int nRows, int nCols, int nBeams) {
@@ -19,7 +17,7 @@ class MagicBeamSolver {
         this.nBeams = nBeams;
 
         this.grid = new int[nRows][nCols];
-        this.beams = new ArrayList<>(nBeams);
+        this.beams = new Beam[nBeams];
 
         this.graph = new ArrayList[nBeams];
         this.reverseGraph = new ArrayList[nBeams];
@@ -32,21 +30,22 @@ class MagicBeamSolver {
 
     public void addBeam(int j, int row, int col, int length, char direction) {
         Beam b = new Beam(j, row, col, length, direction);
-        beams.add(b);
+        beams[j-1] = b;
 
         //update grid
         int[] escapeVector = b.getEscapeVector();
+        int dr = escapeVector[0], dc = escapeVector[1];
         int r = b.row, c = b.col;
 
-        for (int k = 0; k < b.length; k++) {
-
-            if (r < 0 || r >= nRows || c < 0 || c >= nCols) break;
-            if (grid[r][c] != 0) {
+        for (int i = 0; i < b.length; i++) {
+            if (r < 0 || r >= nRows || c < 0 || c >= nCols)
+                break;
+            if (grid[r][c] != 0)
                 throw new IllegalStateException("Overlapping beams at (" + r + ", " + c + ") between beam " + grid[r][c] + " and beam " + b.num);
-            }
-            grid[r][c] = b.num; // Mark the cell with the beam's 1-based index
-            r += escapeVector[0];
-            c += escapeVector[1];
+            // Mark the cell with the beam's 1-based index
+            grid[r][c] = b.num;
+            r += dr;
+            c += dc;
         }
     }
 
@@ -54,55 +53,55 @@ class MagicBeamSolver {
 
     public Result solve(int chosenSize, int chosenStart) {
 
-        // Dependency graph construction : time complexity
+        // Dependency graph construction
         buildGraph();
 
-        // Find necessary beams and in degrees : time complexity
-        int necessaryCount = 0;
+        // Find necessary beams and in degrees
         BitSet isNecessary = new BitSet(nBeams);
-        Queue<Integer> requiredQueue = new LinkedList<>();
+        Queue<Integer> q = new ArrayDeque<>();
 
         // Initial target beams
-        for (Beam b : beams) {
-            if (b.needsRemoval(chosenStart, chosenSize)) {
-                isNecessary.set(b.num-1);
-                requiredQueue.add(b.num-1);
-                necessaryCount++;
+        for (int i = 0; i < nBeams; i++) {
+            if (beams[i].needsRemoval(chosenStart, chosenSize)) {
+                isNecessary.set(i);
+                q.add(i);
             }
         }
 
         // Reverse BFS propagation
-        while (!requiredQueue.isEmpty()) {
-            int curr = requiredQueue.poll();
-
+        while (!q.isEmpty()) {
+            int curr = q.poll();
             for (int blocker : reverseGraph[curr]) {
                 if (!isNecessary.get(blocker)) {
                     isNecessary.set(blocker);
-                    requiredQueue.add(blocker);
-                    necessaryCount++;
+                    q.add(blocker);
                 }
             }
         }
 
+        if (isNecessary.isEmpty()) { // False Alarm, early detection
+            return new Result(true, Collections.emptyIterator());
+        }
+
         // Calculate inDegree ONLY for necessary beams
-        PriorityQueue<Integer> q = new PriorityQueue<>();
+        PriorityQueue<Integer> pq = new PriorityQueue<>();
         int[] inDegree = new int[nBeams];
         for (int i = 0; i < nBeams; i++) {
             if (isNecessary.get(i)) {
                 int degree = reverseGraph[i].size();
-                if (degree == 0) {
-                    q.add(i);
-                }
                 inDegree[i] = degree;
+
+                if (degree == 0)
+                    pq.add(i);
             }
         }
 
         // Topological sort using a priority queue to ensure lexicographical order
-        List<Integer> perm = topologicalSort(inDegree, q, isNecessary);
+        List<Integer> perm = topologicalSort(inDegree, pq, isNecessary);
         Iterator<Integer> order = perm.iterator();
 
         // "Disaster" (Cycle detected)
-        if (necessaryCount != 0 && perm.size() != necessaryCount)
+        if (isNecessary.cardinality() != perm.size())
             return new Result(false, order);
 
         return new Result(true, order);
@@ -113,7 +112,7 @@ class MagicBeamSolver {
 
         while ( !ready.isEmpty() ) {
             int curr = ready.remove();
-            permutation.add(beams.get(curr).num);
+            permutation.add(beams[curr].num);
             for (int v : graph[curr]) {
                 if (isNecessary.get(v)) {
                     inDegree[v]--;
@@ -127,26 +126,27 @@ class MagicBeamSolver {
 
 
     private void buildGraph() {
-        Set<Integer> blocking;
         for (int i = 0; i < nBeams; i++) {
-            Beam b1 = beams.get(i);
+            Beam b1 = beams[i];
+            int[] vec = b1.getEscapeVector();
+            BitSet seen = new BitSet(nBeams);
 
-            blocking = new HashSet<>(nBeams);
-            int[] escapeVector = b1.getEscapeVector();
+            // Start checking from the first cell OUTSIDE the beam's current body
+            int r = b1.row + b1.length * vec[0];
+            int c = b1.col + b1.length * vec[1];
 
-            for (int k = 0; k < Math.max(nRows, nCols); k++) {
-                int r = b1.row + (b1.length + k) * escapeVector[0];
-                int c = b1.col + (b1.length + k) * escapeVector[1];
-                if (r < 0 || r >= nRows || c < 0 || c >= nCols) {
-                    break; // Out of bounds, stop checking further in this direction
+            while (r >= 0 && r < nRows && c >= 0 && c < nCols) {
+                int blockerId = grid[r][c];
+                int bIndex = blockerId - 1;
+                // Avoid self-blocking and duplicates
+                if (blockerId != 0 && bIndex != i && !seen.get(bIndex)) {
+                        seen.set(bIndex);
+                        // blockerIdx must be freed BEFORE i
+                        graph[bIndex].add(i);
+                        reverseGraph[i].add(bIndex);
                 }
-                if (grid[r][c] != 0 && blocking.add(grid[r][c])) {
-                    int blockingBeamIndex = grid[r][c] - 1; // Convert to 0-based index
-                    if (blockingBeamIndex != i) { // Avoid self-blocking
-                        graph[blockingBeamIndex].add(i); // blockingBeam -> b1 | blockingBeam must be removed before b1 can be removed.
-                        reverseGraph[i].add(blockingBeamIndex); // b1 -> blockingBeam  | for backtracking necessary beams. If b1 is necessary, blockingBeam is also necessary.
-                    }
-                }
+                r += vec[0];
+                c += vec[1];
             }
         }
     }

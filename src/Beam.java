@@ -5,10 +5,7 @@ class Beam {
     private static final char WEST = 'W';
     private static final char EAST = 'E';
 
-    final int num;
-    final int row;
-    final int col;
-    final int length;
+    final int num, row, col, length;
     final char direction;
     final int minRow, maxRow, minCol, maxCol;
 
