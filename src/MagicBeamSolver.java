@@ -5,17 +5,15 @@ class MagicBeamSolver {
     private final Comparator<Integer> ROW_CMP;
     private final Comparator<Integer> COL_CMP;
 
+    // Adjacency list: for each entry, saves the beams blocked by the entry
+    private final List<Integer>[] graph;
+
     //saves beam indexes in the order they appear in row/column
     List<Integer>[] rowBeams;
     List<Integer>[] colBeams;
 
     // Array of all Beams
     private final Beam[] beams;
-
-    // Adjacency list for the dependency graph (blocking relationships)
-    // Reverse adjacency list for backtracking necessary beams
-    private final List<Integer>[] graph;
-    private final List<Integer>[] reverseGraph;
 
     // total number of beams
     private final int nBeams;
@@ -35,17 +33,15 @@ class MagicBeamSolver {
         this.colBeams = new ArrayList[nCols];
         this.beams = new Beam[nBeams];
         this.graph = new ArrayList[nBeams];
-        this.reverseGraph = new ArrayList[nBeams];
 
         for (int r = 0; r < nRows; r++) {
-            rowBeams[r] = new ArrayList<>();
+            rowBeams[r] = new ArrayList<>(Math.min(nCols, nBeams));
         }
         for (int c = 0; c < nCols; c++) {
-            colBeams[c] = new ArrayList<>();
+            colBeams[c] = new ArrayList<>(Math.min(nRows, nBeams));
         }
         for (int i = 0; i < nBeams; i++) {
             graph[i] = new ArrayList<>(Math.min(nBeams, 10));
-            reverseGraph[i] = new ArrayList<>(Math.min(nBeams, 10));
         }
 
         ROW_CMP = (a, b) -> Integer.compare(beams[a].getMinCol(), beams[b].getMinCol());
@@ -89,73 +85,58 @@ class MagicBeamSolver {
      * and an Iterator over the found solution
      */
     public Result solve(int chosenSize, int chosenStart) {
-
-        // Dependency graph construction
-        buildGraph();
-
-        // Find necessary beams and in degrees
+        // auxiliary data structures
         BitSet isNecessary = new BitSet(nBeams);
         Queue<Integer> q = new ArrayDeque<>();
-        int[] inDegree = new int[nBeams];
-        // priority queue of necessary beams with NO dependencies
-        Queue<Integer> pq = new PriorityQueue<>(nBeams);
 
-        // Initial target beams (only go over the beams in the selected columns)
+        // Find immediately necessary beams
         for (int i = 0; i < chosenSize; i++) {
-            for (int bIndex : colBeams[chosenStart + i]) {
-                if (!isNecessary.get(bIndex)) {
-                    isNecessary.set(bIndex); q.add(bIndex);
-
-                    inDegree[bIndex] = reverseGraph[bIndex].size();
-                    if (inDegree[bIndex] == 0)
-                        pq.add(bIndex);
+            for (int b : colBeams[chosenStart + i]) {
+                if (!isNecessary.get(b)) {
+                    isNecessary.set(b);
+                    q.add(b);
                 }
             }
         }
 
-        if (q.isEmpty())// False Alarm, early detection
+        if (q.isEmpty()) // False Alarm, early detection
             return new Result(false, Collections.emptyIterator());
 
-        // Reverse BFS propagation
-        while (!q.isEmpty()) {
-            int curr = q.poll();
-            for (int blocker : reverseGraph[curr]) {
-                if (!isNecessary.get(blocker)) {
-                    isNecessary.set(blocker); q.add(blocker);
-
-                    inDegree[blocker] = reverseGraph[blocker].size();
-                    if (inDegree[blocker] == 0)
-                        pq.add(blocker);
-                }
-            }
-        }
+        // Dependency graph construction and in degree's of said graph
+        int[] inDeg = buildGraph(isNecessary, q);
 
         // Topological sort using a priority queue to ensure lexicographical order
-        List<Integer> perm = topologicalSort(inDegree, pq, isNecessary);
-        Iterator<Integer> order = perm.iterator();
+        List<Integer> perm = topologicalSort(inDeg, isNecessary);
 
         // if disaster true then a cycle was detected
         boolean disaster = isNecessary.cardinality() != perm.size();
-        return new Result(disaster, order);
+        return new Result(disaster, perm.iterator());
     }
 
     /**
      * topologically sorts the beams we need to remove
-     * @param inDegree contains the in degree of each necessary beam
-     * @param ready initial priority queue of beams ready to be removed
+     *
+     * @param inDeg contains the in degree of each necessary beam
      * @param isNecessary all beams we need to remove
      * @return permutation of beams, ordered by dependencies and b.num
      */
-    private List<Integer> topologicalSort(int[] inDegree, Queue<Integer> ready, BitSet isNecessary) {
-        List<Integer> permutation = new ArrayList<>(isNecessary.cardinality());
+    private List<Integer> topologicalSort(int[] inDeg, BitSet isNecessary) {
+        int necessary = isNecessary.cardinality();
+        List<Integer> permutation = new ArrayList<>(necessary);
+        Queue<Integer> ready = new PriorityQueue<>(necessary);
+
+        //initialize ready with beams with no dependencies
+        for (int i = 0; i < nBeams; i++) {
+            if (isNecessary.get(i) && inDeg[i] == 0)
+                ready.add(i);
+        }
 
         while ( !ready.isEmpty() ) {
             int curr = ready.poll();
             permutation.add(beams[curr].getID());
             for (int v : graph[curr]) {
                 if (isNecessary.get(v)) {
-                    inDegree[v]--;
-                    if (inDegree[v] == 0)
+                    if (--inDeg[v] == 0)
                         ready.add(v);
                 }
             }
@@ -164,40 +145,48 @@ class MagicBeamSolver {
     }
 
     /**
-     * builds adjacency lists from the completed grid (grid has all the beams already inserted)
+     * builds adjacency lists and in degrees for beams we need to remove
+     * updates isNecessary (dependency propagation)
      * uses 0-based indexes
+     *
+     * @param isNecessary keeps track of necessary beams (helps avoid duplicate entries in q)
+     * @param q queue of beams we want to check for dependencies
+     * @return the in degree of each beam considering their found dependencies
      */
-    private void buildGraph() {
+    private int[] buildGraph(BitSet isNecessary, Queue<Integer> q) {
+        //ensure beams are ordered in rowBeams and colBeams
         sortBeams();
 
-        for (Beam b : beams) {
-            List<Integer> line;
-            int pos, start, end;
+        int[] inDeg = new int[nBeams];
+        while (!q.isEmpty()) {
+            // get next beam
+            int bIndex = q.poll();
+            Beam b = beams[bIndex];
 
             // get beam line and its line order/position
-            if (b.isHorizontal()) {
-                line = rowBeams[b.getRow()];
-                pos = b.getRowOrder();
-            } else{
-                line = colBeams[b.getCol()];
-                pos = b.getColOrder();
-            }
+            boolean horizontal = b.isHorizontal();
+            List<Integer> line = horizontal ? rowBeams[b.getRow()] : colBeams[b.getCol()];
+            int pos = horizontal ? b.getRowOrder() : b.getColOrder();
 
             // determine blockers
-            if (b.pointsForward()) {
-                start = pos + 1;
-                end = line.size();
-            } else {
-                start = 0;
-                end = pos;
-            }
+            boolean forward = b.pointsForward();
+            int start = forward ? pos + 1 : 0;
+            int end = forward ? line.size() : pos;
 
             for (int i = start; i < end; i++) {
-                int blockerIndex = line.get(i);
-                graph[blockerIndex].add(b.getIndex());
-                reverseGraph[b.getIndex()].add(blockerIndex);
+                int blocker = line.get(i);
+                int blocked = b.getIndex();
+                graph[blocker].add(blocked);
+                inDeg[blocked]++; //number of dependencies go up
+
+                if (!isNecessary.get(blocker)) {
+                    isNecessary.set(blocker);
+                    q.add(blocker);
+                }
             }
         }
+
+        return inDeg;
     }
 
     /**
