@@ -33,7 +33,7 @@ public class Main {
             }
 
             MagicBeamSolver.Result result = solver.solve(chosenSize, chosenStart);
-            if (!result.success()) {
+            if (result.disaster()) {
                 System.out.println("Disaster");
             } else {
                 printOrder(result.order());
